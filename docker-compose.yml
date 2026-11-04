@@ -1,0 +1,50 @@
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: request_board
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-secret}
+    ports:
+      - "${DB_PORT_HOST:-3307}:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      # schema.sql se importa automáticamente la primera vez que se crea el volumen.
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${DB_ROOT_PASSWORD:-secret}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: request_board
+      DB_USERNAME: root
+      DB_PASSWORD: ${DB_ROOT_PASSWORD:-secret}
+      CACHE_STORE: file
+      SESSION_DRIVER: file
+      LOG_CHANNEL: stderr
+      LLM_ENABLED: ${LLM_ENABLED:-true}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-120b}
+    ports:
+      - "${API_PORT_HOST:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "${WEB_PORT_HOST:-8080}:80"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
